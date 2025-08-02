@@ -1,0 +1,32 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL",
+    "meta": {
+        "version": "PLCN_v1",
+        "update_url": null
+    },
+    "exported_at": "2025-04-01T13:13:29+00:00",
+    "name": "Fika Headless",
+    "author": "",
+    "uuid": "10fc7769-07d5-4142-b2fd-390ab635836c",
+    "description": null,
+    "features": [],
+    "docker_images": {
+        "wine": "ghcr.io\/parkervcp\/yolks:wine_latest"
+    },
+    "file_denylist": [],
+    "startup": "wine .\/Headless\/*.bat",
+    "config": {
+        "files": "{}",
+        "startup": "{}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!\/bin\/bash\r\nset -euo pipefail  # Exit on error, undefined variables, and pipeline failures\r\n\r\ndpkg --add-architecture i386\r\napt update && apt install -y wine wine32\r\n\r\nchown -R root: \/mnt\r\n\r\nexport WINEPREFIX=\"\/mnt\/server\/.wine\"\r\nwineboot -u\r\n\r\n# Initialize directorie\r\nmkdir -p \/mnt\/server\r\ncd \/mnt\/server || exit 1\r\n\r\n# Error handling function\r\nhandle_error() {\r\n    echo \"ERROR: Installation failed on line $1\"\r\n    exit 1\r\n}\r\n\r\ntrap 'handle_error $LINENO' ERR\r\n\r\nINSTALL_DIR=\"Dummy_EFT\"\r\n\r\n# Create directory structure\r\nmkdir -p \"$INSTALL_DIR\/BattlEye\"\r\nmkdir -p \"Headless\"\r\n\r\n# Create empty placeholder files\r\ntouch \"$INSTALL_DIR\/BattlEye\/BEClient_x64.dll\" \\\r\n      \"$INSTALL_DIR\/BattlEye\/BEService_x64.exe\" \\\r\n      \"$INSTALL_DIR\/ConsistencyInfo\" \\\r\n      \"$INSTALL_DIR\/Uninstall.exe\" \\\r\n      \"$INSTALL_DIR\/UnityCrashHandler64.exe\"\r\n\r\nWIN_INSTALL_PATH=\"$(winepath -w \"$INSTALL_DIR\")\"\r\n\r\n# Add registry entry using Wine\r\nwine reg add \"HKEY_LOCAL_MACHINE\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\EscapeFromTarkov\" \\\r\n    \/v \"InstallLocation\" \\\r\n    \/t REG_SZ \\\r\n    \/d \"z:\\home\\container\\Dummy_EFT\" \\\r\n    \/f >\/dev\/null 2>&1\r\n\r\necho \"Registry updated and files created.\"\r\necho \"Note: The dummy files are located at: $INSTALL_DIR\"\r\n\r\nwine reg query \"HKEY_LOCAL_MACHINE\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\EscapeFromTarkov\"",
+            "container": "ghcr.io\/parkervcp\/installers:ubuntu",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": []
+}
