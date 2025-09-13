@@ -14,7 +14,7 @@
         "ghcr.io\/parkervcp\/steamcmd:proton": "ghcr.io\/parkervcp\/steamcmd:proton"
     },
     "file_denylist": [],
-    "startup": "rm \/home\/container\/DeadMatter\/Saved\/Logs\/DeadMatter.log; proton run /DeadMatterServer.exe -SteamServerName=\"{{SERVER_NAME}}\" -port={{SERVER_PORT}} -queryport={{QUERY_PORT}}  & DM_PID=$!; tail -c0 -F  \/home\/container\/DeadMatter\/Saved\/Logs\/DeadMatter.log --pid=$DM_PID",
+    "startup": "rm \/home\/container\/DeadMatter\/Saved\/Logs\/DeadMatter.log; proton run DeadMatterServer.exe -SteamServerName=\"{{SERVER_NAME}}\" -port={{SERVER_PORT}} -queryport={{QUERY_PORT}}  & DM_PID=$!; tail -c0 -F  \/home\/container\/DeadMatter\/Saved\/Logs\/DeadMatter.log --pid=$DM_PID",
     "config": {
         "files": "{}",
         "startup": "{\r\n    \"done\": \"LogInit: Display: Starting Game\"\r\n}",
