@@ -1,0 +1,167 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL",
+    "meta": {
+        "version": "PLCN_v3",
+        "update_url": null
+    },
+    "exported_at": "2025-11-09T17:10:21+00:00",
+    "name": "SPT Fika Dedicated Client",
+    "author": "maxomatic458.dev@gmail.com",
+    "uuid": "24d8f5a6-ac9e-4c22-b91b-afd21e71c808",
+    "description": null,
+    "tags": [],
+    "features": [],
+    "docker_images": {
+        "ghcr.io/pelican-eggs/yolks:wine_latest": "ghcr.io/pelican-eggs/yolks:wine_latest"
+    },
+    "file_denylist": [],
+    "startup_commands": {
+        "Default": "./pre-check.sh && cd Dedicated-Client && (tail -f BepInEx/LogOutput.log & PID=$!; wine {{EFT_BINARY}} -token=\"{{PROFILE_ID}}\" -config=\"{'BackendUrl':'{{BACKEND_URL}}', 'Version':'live'}\" -batchmode -nographics; kill $PID)"
+    },
+    "config": {
+        "files": "{}",
+        "startup": "{\n    \"done\": \"Chainloader startup complete\"\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# SPT/Fika Dedicated (Headless) Client\nGREEN='\\033[0;32m'\nRED='\\033[0;31m'\ncd ${HOME}\n\necho -e \"${GREEN}Installing .NET SDK 9.0\"\n# Install wget if not present\napt-get update\napt-get install -y wget\n\n# Download and install Microsoft package signing key\nwget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb\ndpkg -i packages-microsoft-prod.deb\nrm packages-microsoft-prod.deb\n\n# Install .NET SDK 9.0\napt-get update\napt-get install -y dotnet-sdk-9.0\n\n# Verify dotnet installation and add to PATH\nexport PATH=\"$PATH:/usr/share/dotnet\"\nexport DOTNET_ROOT=/usr/share/dotnet\n\n# Check if dotnet is available\nif ! command -v dotnet &> /dev/null; then\n    echo -e \"${RED}dotnet command not found after installation. Trying alternative paths...\"\n    \n    # Try common dotnet installation paths\n    if [ -f \"/usr/bin/dotnet\" ]; then\n        export PATH=\"/usr/bin:$PATH\"\n    elif [ -f \"/usr/share/dotnet/dotnet\" ]; then\n        export PATH=\"/usr/share/dotnet:$PATH\"\n    elif [ -f \"/opt/dotnet/dotnet\" ]; then\n        export PATH=\"/opt/dotnet:$PATH\"\n        export DOTNET_ROOT=/opt/dotnet\n    else\n        echo -e \"${RED}Could not find dotnet installation. Exiting.\"\n        exit 1\n    fi\nfi\n\n# Verify dotnet is now available\ndotnet --version\nif [ $? -ne 0 ]; then\n    echo -e \"${RED}dotnet is still not working. Exiting.\"\n    exit 1\nfi\n\necho -e \"${GREEN}dotnet version: $(dotnet --version)\"\n\n# Add BepInEx NuGet source\ndotnet nuget add source https://nuget.bepinex.dev/v3/index.json\n\n# download and build the fika plugins\nmkdir tmp\ncd tmp\n\n# build the fika plugin\necho -e \"${GREEN}Building the fika plugin\"\ngit clone https://github.com/project-fika/Fika-Plugin -b ${FIKA_PLUGIN_BRANCH}\ncd Fika-Plugin\ndotnet build --configuration Release\nif [ $? -ne 0 ]; then\n    echo -e \"${RED}Failed to build Fika-Plugin\"\n    exit 1\nfi\ncd ${HOME}/tmp\n\n# build the Fika-Headless \necho -e \"${GREEN}Building the Fika-Headless\"\ngit clone https://github.com/project-fika/Fika-Headless -b ${FIKA_DEDICATED_BRANCH}\ncd Fika-Headless\ndotnet build --configuration Release\nif [ $? -ne 0 ]; then\n    echo -e \"${RED}Failed to build Fika-Headless\"\n    exit 1\nfi\n\n# setup directories\ncd ${HOME}\nmkdir -p /mnt/server/Dedicated-Client/BepInEx/plugins\nmkdir -p /mnt/server/.wine/drive_c/live\n\n# registry files\necho -e \"${GREEN}Importing custom registry files\"\napt-get install -yq curl\ncd /mnt/server/.wine\ncurl -o system.reg https://raw.githubusercontent.com/zhliau/fika-headless-docker/22ea3d450010f44edcae3efec6f671040b9d98c5/data/reg/system.reg\ncurl -o user.reg https://raw.githubusercontent.com/zhliau/fika-headless-docker/22ea3d450010f44edcae3efec6f671040b9d98c5/data/reg/user.reg\necho -e \"${GREEN}Imported custom registry files\"\n\ncd ${HOME}\n\n# Create pre-check script\ncat > /mnt/server/pre-check.sh << 'EOF'\n#!/bin/bash\nRED=\"\\033[0;31m\" \nif [ ! -f ./.wine/drive_c/live/ConsistencyInfo ]; then\n    echo -e \"${RED}The live EFT files are not present, put them in /home/container/.wine/drive_c/live (EscapeFromTarkov_Data is not required)\"\n    exit 1\nfi\nif [ ! -f ./Dedicated-Client/EscapeFromTarkov.exe ]; then\n    echo -e \"${RED}The SPT Files are not present, put them in /home/container/Dedicated-Client\"\n    exit 1\nfi\nEOF\nchmod +x /mnt/server/pre-check.sh\n\n# Copy built DLLs - Check for both net471 and netstandard2.1\necho -e \"${GREEN}Copying built plugins\"\n\n# Find Fika.Core.dll\nFIKA_CORE_DLL=\"\"\nif [ -f \"${HOME}/tmp/Fika-Plugin/Fika.Core/bin/Release/net471/Fika.Core.dll\" ]; then\n    FIKA_CORE_DLL=\"${HOME}/tmp/Fika-Plugin/Fika.Core/bin/Release/net471/Fika.Core.dll\"\nelif [ -f \"${HOME}/tmp/Fika-Plugin/Fika.Core/bin/Release/netstandard2.1/Fika.Core.dll\" ]; then\n    FIKA_CORE_DLL=\"${HOME}/tmp/Fika-Plugin/Fika.Core/bin/Release/netstandard2.1/Fika.Core.dll\"\nfi\n\nif [ -n \"$FIKA_CORE_DLL\" ] && [ -f \"$FIKA_CORE_DLL\" ]; then\n    cp \"$FIKA_CORE_DLL\" /mnt/server/Dedicated-Client/BepInEx/plugins/\n    echo -e \"${GREEN}Fika.Core.dll copied successfully from: $FIKA_CORE_DLL\"\nelse\n    echo -e \"${RED}Fika.Core.dll not found in any expected location\"\n    echo -e \"${RED}Checking available files:\"\n    find ${HOME}/tmp/Fika-Plugin -name \"Fika.Core.dll\" 2>/dev/null\nfi\n\n# Find Fika.Headless.dll\nFIKA_HEADLESS_DLL=\"\"\nif [ -f \"${HOME}/tmp/Fika-Headless/Fika.Headless/bin/Release/net471/Fika.Headless.dll\" ]; then\n    FIKA_HEADLESS_DLL=\"${HOME}/tmp/Fika-Headless/Fika.Headless/bin/Release/net471/Fika.Headless.dll\"\nelif [ -f \"${HOME}/tmp/Fika-Headless/Fika.Headless/bin/Release/netstandard2.1/Fika.Headless.dll\" ]; then\n    FIKA_HEADLESS_DLL=\"${HOME}/tmp/Fika-Headless/Fika.Headless/bin/Release/netstandard2.1/Fika.Headless.dll\"\nfi\n\nif [ -n \"$FIKA_HEADLESS_DLL\" ] && [ -f \"$FIKA_HEADLESS_DLL\" ]; then\n    cp \"$FIKA_HEADLESS_DLL\" /mnt/server/Dedicated-Client/BepInEx/plugins/\n    echo -e \"${GREEN}Fika.Headless.dll copied successfully from: $FIKA_HEADLESS_DLL\"\nelse\n    echo -e \"${RED}Fika.Headless.dll not found in any expected location\"\n    echo -e \"${RED}Checking available files:\"\n    find ${HOME}/tmp/Fika-Headless -name \"Fika.Headless.dll\" 2>/dev/null\nfi\n\n# Cleanup\necho -e \"${GREEN}Cleaning up temporary files\"\ncd ${HOME}\nrm -rf tmp\n\necho -e \"${GREEN}Install complete!\"",
+            "container": "ghcr.io/parkervcp/installers:ubuntu",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "sort": 2,
+            "name": "Backend Url",
+            "description": "",
+            "env_variable": "BACKEND_URL",
+            "default_value": "http://0.0.0.0:6969",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": [
+                "required",
+                "string"
+            ]
+        },
+        {
+            "sort": 5,
+            "name": ".NET version",
+            "description": "The .NET version used to compile the plugins",
+            "env_variable": "DOTNET_VERSION",
+            "default_value": "9.0",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "required",
+                "string"
+            ]
+        },
+        {
+            "sort": 10,
+            "name": "EFT_BINARY",
+            "description": "",
+            "env_variable": "EFT_BINARY",
+            "default_value": "/home/container/Dedicated-Client/EscapeFromTarkov.exe",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": [
+                "string",
+                "required"
+            ]
+        },
+        {
+            "sort": 4,
+            "name": "Fika dedicated branch",
+            "description": "The branch where the fika dedicated plugin is compiled from",
+            "env_variable": "FIKA_DEDICATED_BRANCH",
+            "default_value": "main",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "required",
+                "string"
+            ]
+        },
+        {
+            "sort": 3,
+            "name": "Fika plugin branch",
+            "description": "The branch where the fika plugin is compiled from",
+            "env_variable": "FIKA_PLUGIN_BRANCH",
+            "default_value": "main",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "required",
+                "string"
+            ]
+        },
+        {
+            "sort": 1,
+            "name": "Profile ID",
+            "description": "The ID of the profile to use as dedicated client",
+            "env_variable": "PROFILE_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": [
+                "required",
+                "string"
+            ]
+        },
+        {
+            "sort": 8,
+            "name": "WINEARCH",
+            "description": "",
+            "env_variable": "WINEARCH",
+            "default_value": "win64",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "required",
+                "string",
+                "max:20"
+            ]
+        },
+        {
+            "sort": 6,
+            "name": "WINEDEBUG",
+            "description": "WINEDEBUG: Debug Level of wine",
+            "env_variable": "WINEDEBUG",
+            "default_value": "-all",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "nullable",
+                "string",
+                "max:20"
+            ]
+        },
+        {
+            "sort": 9,
+            "name": "WINEPREFIX",
+            "description": "",
+            "env_variable": "WINEPREFIX",
+            "default_value": "/home/container/.wine",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "string"
+            ]
+        },
+        {
+            "sort": 7,
+            "name": "WINETRICKS_RUN",
+            "description": "",
+            "env_variable": "WINETRICKS_RUN",
+            "default_value": "vcrun2019",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": [
+                "required",
+                "string"
+            ]
+        }
+    ]
+}
